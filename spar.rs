@@ -35,12 +35,12 @@ pub enum FlagValue {
 impl std::fmt::Display for FlagValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            Self::Bool(value) => f.write_fmt(format_args!("{value}")),
-            Self::Long(value) => f.write_fmt(format_args!("{value}")),
-            Self::ULong(value) => f.write_fmt(format_args!("{value}")),
-            Self::Float(value) => f.write_fmt(format_args!("{value}")),
-            Self::Double(value) => f.write_fmt(format_args!("{value}")),
-            Self::String(value) => f.write_fmt(format_args!("\"{}\"", &value)),
+            Self::Bool(value) => write!(f, "{value}"),
+            Self::Long(value) => write!(f, "{value}"),
+            Self::ULong(value) => write!(f, "{value}"),
+            Self::Float(value) => write!(f, "{value}"),
+            Self::Double(value) => write!(f, "{value}"),
+            Self::String(value) => write!(f, "\"{value}\""),
         }
     }
 }
