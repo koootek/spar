@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, non_camel_case_types, non_snake_case)]
+#![allow(unused, non_camel_case_types)]
 
 #[derive(PartialEq)]
 pub enum LogLevel {
@@ -43,25 +43,23 @@ impl std::fmt::Display for RustEdition {
 }
 
 macro_rules! unwrap_bool {
-    ($fn:expr) => {
-        match $fn {
+    ($result:expr) => {
+        match $result {
             Ok(value) => value,
             Err(_) => return true,
         }
     };
-    ($fn:expr, $errval:expr) => {
-        match $fn {
-            Ok(value) => value,
-            Err(_) => return $errval,
-        }
-    };
 }
 
-fn needs_rebuild(output_path: &str, source_paths: &[&str]) -> bool {
+fn needs_rebuild<T>(output_path: &str, sources: &[T]) -> bool
+where 
+    T: AsRef<str>,
+{
     let output_meta = unwrap_bool!(std::fs::metadata(output_path));
 
-    for source_path in source_paths {
-        let source_meta = unwrap_bool!(std::fs::metadata(source_path));
+    for source in sources {
+        let s = source.as_ref();
+        let source_meta = unwrap_bool!(std::fs::metadata(std::path::Path::new(s)));
         let output_time = unwrap_bool!(output_meta.modified());
         let source_time = unwrap_bool!(source_meta.modified());
         if output_time < source_time {
@@ -74,29 +72,31 @@ fn needs_rebuild(output_path: &str, source_paths: &[&str]) -> bool {
 /// Rebuilds the program with predefined edition (R2024) and O3 optimizations.
 ///
 /// First arg in `proc_args` must be the path to the executable.
-pub fn rebuild<T>(proc_args: &mut dyn Iterator<Item = String>, main_path: &str, extra_sources: &[T])
+///
+/// First source file is considered the main file
+pub fn rebuild<T>(proc_args: &mut dyn Iterator<Item = String>, sources: &[T])
 where
     T: AsRef<str>,
 {
-    rebuild_edition(proc_args, RustEdition::R2024, main_path, extra_sources);
+    rebuild_edition(proc_args, RustEdition::R2024, sources);
 }
 
 /// Rebuilds the program with O3 optimizations and a custom edition.
 ///
 /// First arg in `proc_args` must be the path to the executable.
+///
+/// First source file is considered the main file
 pub fn rebuild_edition<T>(
     proc_args: &mut dyn Iterator<Item = String>,
     edition: RustEdition,
-    main_path: &str,
-    extra_sources: &[T],
+    sources: &[T],
 ) where
     T: AsRef<str>,
 {
     rebuild_edition_args(
         proc_args,
         edition,
-        main_path,
-        extra_sources,
+        sources,
         &[("-O", None)],
     );
 }
@@ -104,11 +104,12 @@ pub fn rebuild_edition<T>(
 /// Rebuilds the program with no additional flags and a custom edition.
 ///
 /// First arg in `proc_args` must be the path to the executable.
+///
+/// First source file is considered the main file
 pub fn rebuild_edition_args<T>(
     proc_args: &mut dyn Iterator<Item = String>,
     edition: RustEdition,
-    main_path: &str,
-    extra_sources: &[T],
+    sources: &[T],
     rustc_args: &[(&str, Option<&str>)],
 ) where
     T: AsRef<str>,
@@ -117,9 +118,7 @@ pub fn rebuild_edition_args<T>(
         Some(self_path) => self_path,
         None => return,
     };
-    let mut source_paths = vec![main_path];
-    source_paths.append(&mut extra_sources.iter().map(|path| path.as_ref()).collect());
-    if !needs_rebuild(&self_path, &source_paths) {
+    if !needs_rebuild(&self_path, &sources) {
         return;
     }
 
@@ -138,7 +137,7 @@ pub fn rebuild_edition_args<T>(
             &edition.to_string(),
             "-o",
             &self_path,
-            main_path,
+            sources[0].as_ref()
         ])
         .status()
         .expect("failed to rebuild");
@@ -179,7 +178,7 @@ pub fn generate_project(root_file: &str, edition: RustEdition) -> std::io::Resul
         "rust-project.json",
         &format!(
             r#"{{
-"sysroot_src": "{}",
+"sysroot_src": "{}/lib/rustlib/src/rust/library",
 "crates": [
     {{
         "root_module": "{}",
@@ -188,10 +187,7 @@ pub fn generate_project(root_file: &str, edition: RustEdition) -> std::io::Resul
     }}
 ]
 }}"#,
-            format!(
-                "{}/lib/rustlib/src/rust/library",
-                sysroot_path.next().unwrap()
-            ),
+            sysroot_path.next().ok_or_else(|| std::io::Error::other("failed to get sysroot path"))?,
             root_file,
             edition
         ),
