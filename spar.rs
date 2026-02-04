@@ -12,6 +12,7 @@ pub struct FlagContext {
     flags: [Option<Rc<RefCell<OwnedFlag>>>; FLAG_CAP],
     position: usize,
     flag_ignore: bool,
+    assign_short_form: bool,
 }
 
 impl FlagContext {
@@ -20,6 +21,7 @@ impl FlagContext {
             flags: [const { None }; FLAG_CAP],
             position: 0,
             flag_ignore: true,
+            assign_short_form: true,
         }
     }
 
@@ -39,7 +41,7 @@ pub struct OwnedFlag {
 impl OwnedFlag {
     fn new(name: &'static str, value: FlagValue) -> Self {
         Self {
-            name, short_form: &name[0..=0], value
+            name, short_form: "", value
         }
     }
 
@@ -234,12 +236,21 @@ pub fn disable_flag_ignore() {
     FLAGS.with_borrow_mut(|ctx| ctx.flag_ignore = false);
 }
 
+pub fn disable_assign_short_form() {
+    FLAGS.with_borrow_mut(|ctx| ctx.assign_short_form = false);
+}
+
 fn new_flag(name: &'static str, value: FlagValue) -> Flag {
     FLAGS.with_borrow_mut(|ctx| {
         if ctx.position == FLAG_CAP {
             panic!("exceeded FLAG_CAP={}", FLAG_CAP);
         }
-        let flag = Rc::new(RefCell::new(OwnedFlag::new(name, value)));
+        let flag = Rc::new(RefCell::new(
+                OwnedFlag::with_short_form(
+                    name,
+                    if ctx.assign_short_form { &name[0..=0] } else { "" },
+                    value
+                )));
         ctx.push(Rc::clone(&flag));
         Flag::new(flag)
     })
