@@ -11,13 +11,15 @@ thread_local! {
 pub struct FlagContext {
     flags: [Option<Rc<RefCell<OwnedFlag>>>; FLAG_CAP],
     position: usize,
+    flag_ignore: bool,
 }
 
 impl FlagContext {
     const fn new() -> Self {
         Self {
             flags: [const { None }; FLAG_CAP],
-            position: 0
+            position: 0,
+            flag_ignore: true,
         }
     }
 
@@ -110,6 +112,7 @@ pub fn parse_args(proc_args: &mut dyn Iterator<Item = String>) {
             if ignore {
                 chars.next();
             }
+            let ignore = ctx.flag_ignore && ignore;
             let mut name = String::new();
             for c in chars {
                 name.push(c);
@@ -202,6 +205,10 @@ impl Flag {
     pub fn value(&self) -> FlagValue {
         self.get().value.clone()
     }
+}
+
+pub fn disable_flag_ignore() {
+    FLAGS.with_borrow_mut(|ctx| ctx.flag_ignore = false);
 }
 
 fn new_flag(name: &'static str, value: FlagValue) -> Flag {
